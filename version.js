@@ -1,0 +1,1 @@
+window.GREED_LATEST_VERSION = 1;
