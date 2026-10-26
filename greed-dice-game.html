@@ -736,7 +736,7 @@
   // This build's version, baked in. The update check on page load compares
   // it against window.GREED_LATEST_VERSION from the hosted version.js; bump
   // this integer whenever a new build is published.
-  const GREED_VERSION=3;
+  const GREED_VERSION=4;
   const PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
   const DEFAULT_SCORING={
     single:{1:100,5:50},
@@ -1383,7 +1383,15 @@
     if(state.phase==="ready"){ els.roll.disabled=state.gameOver||bot; els.roll.textContent=`Roll ${state.activeCount} ${state.activeCount===1?"die":"dice"}`; }
     else if(state.phase==="rolling"){ els.roll.disabled=true; els.roll.textContent="Rolling…"; }
     else if(state.phase==="choose"){
-      els.roll.disabled=!hasValid||bot; const remain=state.activeCount-state.selected.size; els.roll.textContent=remain===0?"Roll hot dice":`Keep & roll ${remain}`;
+      // Dynamic Keep & roll: grey it out when banked + turn pot hits the win
+      // target — the pot (project) already includes the current selection, so
+      // nothing is counted twice. winsAt() gives exactly-on for an exact
+      // game and reached-or-over otherwise. Bank is the winning move there
+      // and stays enabled; if Bank is locked for another reason instead
+      // (qualification, fresh-roll rule), Keep & roll stays enabled so the
+      // player is never left with both buttons greyed.
+      const hitsTarget=hasValid&&winsAt(player.score+project,state.activeRules);
+      els.roll.disabled=!hasValid||bot||(hitsTarget&&!els.bank.disabled); const remain=state.activeCount-state.selected.size; els.roll.textContent=remain===0?"Roll hot dice":`Keep & roll ${remain}`;
     } else els.roll.disabled=true;
     if(state.phase==="choose"&&!bot){
       if(!state.selected.size) els.message.innerHTML="Choose any number of dashed scoring dice to keep. Unselected dice will roll again.";
