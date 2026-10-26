@@ -1,1 +1,1 @@
-window.GREED_LATEST_VERSION = 2;
+window.GREED_LATEST_VERSION = 3;
