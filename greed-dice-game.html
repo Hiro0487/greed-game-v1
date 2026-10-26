@@ -736,7 +736,7 @@
   // This build's version, baked in. The update check on page load compares
   // it against window.GREED_LATEST_VERSION from the hosted version.js; bump
   // this integer whenever a new build is published.
-  const GREED_VERSION=2;
+  const GREED_VERSION=3;
   const PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
   const DEFAULT_SCORING={
     single:{1:100,5:50},
@@ -1474,42 +1474,25 @@
     }
     state.finalLeader=playerIndex;
   }
-  // Last-chance bank guard: on a human's final-round turn, banking short of
-  // the target while enough scoring points still show on the table to cross
-  // asks first, in plain words. It stays silent everywhere else — a bank
-  // that crosses, a normal turn, a bot's turn, or a table whose showing
-  // points could not reach the target anyway. A dead roll never reaches
-  // here at all: it ends the turn on its own, with nothing to decide.
-  function bankGuardExtra(ev){
-    return evaluate([...candidateIndices(state.rolled)].map(i=>state.rolled[i])).score-ev.score;
-  }
-  // Exact-score mode: the win is reachable when ANY legal pick from the dice
-  // now showing lands exactly on the target — not only when taking every
-  // showing point at once would. (Taking them all usually overshoots, which
-  // used to silence the guard even when a smaller pick hit exactly.)
-  function bankGuardExactReachable(){
-    const p=currentPlayer(),rules=state.activeRules,candidates=[...candidateIndices(state.rolled)];
-    for(let mask=1;mask<(1<<candidates.length);mask++){
-      const pick=selectionEval(candidates.filter((_,bit)=>mask&(1<<bit)));
-      if(pick.valid&&p.score+state.turnScore+pick.score===rules.target)return true;
-    }
-    return false;
-  }
+  // Last-chance bank guard: on a human's final-round turn, ANY bank that
+  // does not win asks first, in plain words — exact and non-exact alike.
+  // Banking short ends the game as a loss once the final queue runs out,
+  // while rolling on keeps a chance alive, so the warning never waits to
+  // see whether the dice showing right now could cross on their own. It
+  // stays silent everywhere else — a bank that wins, a normal turn, or a
+  // bot's turn. A dead roll never reaches here at all: it ends the turn
+  // on its own, with nothing to decide.
   function bankGuardApplies(ev,project){
     const p=currentPlayer();
     if(!p||p.type!=="human"||state.gameOver)return false;
     if(!state.finalRound||!state.finalQueue.includes(state.current))return false;
     if(winsAt(p.score+project,state.activeRules))return false;
-    if(state.activeRules.exactWin)return bankGuardExactReachable();
-    const showing=bankGuardExtra(ev);
-    return showing>0&&winsAt(p.score+project+showing,state.activeRules);
+    return true;
   }
   function showBankGuard(ev){
     const rules=state.activeRules,p=currentPlayer(),project=state.turnScore+(ev.valid?ev.score:0);
-    $("bankGuardCopy").textContent=rules.exactWin
-      ?`Hold on — banking now leaves you short of ${rules.target.toLocaleString()}, but the dice showing can still land you exactly on ${rules.target.toLocaleString()} — you're only ${(rules.target-p.score-project).toLocaleString()} points away. Bank anyway?`
-      :`Hold on — banking now leaves you short of ${rules.target.toLocaleString()}, but you've got ${bankGuardExtra(ev).toLocaleString()} points showing that could take you over. Bank anyway?`;
-    logTurn(`${p.name} tapped Bank on the last chance — warned that banking ${project.toLocaleString()} would fall short of ${rules.target.toLocaleString()}.`);
+    $("bankGuardCopy").textContent=`Hold on — this is your last chance. Banking now leaves you at ${(p.score+project).toLocaleString()}, short of ${rules.target.toLocaleString()} — and once this final round ends, that's a loss. Keep rolling and you still have a chance to ${rules.exactWin?`land exactly on ${rules.target.toLocaleString()}`:`reach ${rules.target.toLocaleString()}`}. Bank anyway?`;
+    logTurn(`${p.name} tapped Bank on the last chance — warned that banking ${project.toLocaleString()} would fall short of ${rules.target.toLocaleString()} and end the game as a loss.`);
     openModal("bankGuardModal");
   }
   // A Bank tap that cannot bank says why, out loud and in the turn log —
