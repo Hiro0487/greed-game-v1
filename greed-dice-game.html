@@ -417,7 +417,7 @@
       <p>A new version of Greed is available.</p>
       <div class="update-banner-actions">
         <a class="update-open" href="https://games.bradysledger.com">Open newest version</a>
-        <a class="update-download" href="https://games.bradysledger.com/greed-dice-game.html" download>Download newest version</a>
+        <button class="update-download" id="updateDownloadBtn" type="button">Download newest version</button>
         <button class="update-dismiss" id="updateDismissBtn" type="button">Not now</button>
       </div>
     </div>
@@ -736,7 +736,7 @@
   // This build's version, baked in. The update check on page load compares
   // it against window.GREED_LATEST_VERSION from the hosted version.js; bump
   // this integer whenever a new build is published.
-  const GREED_VERSION=4;
+  const GREED_VERSION=5;
   const PIPS={1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
   const DEFAULT_SCORING={
     single:{1:100,5:50},
@@ -1694,11 +1694,57 @@
   function checkForUpdate(){
     const tag=document.createElement("script");
     tag.async=true;
-    tag.src="https://games.bradysledger.com/version.js";
+    tag.src=UPDATE_BASE+"/version.js";
     tag.onload=maybeShowUpdateBanner;
     tag.onerror=()=>{};
     document.head.appendChild(tag);
   }
+  // Update download, v5: browsers ignore the download attribute on
+  // cross-origin links, so the old banner link just navigated. Instead
+  // the button loads the hosted game as a script (script tags are not
+  // blocked cross-origin — the same trick the version check uses),
+  // validates it, and saves it as a local file. Any failure falls back
+  // to opening the newest version online, the path that already works.
+  const UPDATE_BASE="https://games.bradysledger.com";
+  function b64ToUtf8(b64){
+    const bin=atob(b64),bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+  function downloadNewestVersion(){
+    const btn=$("updateDownloadBtn");
+    const latest=window.GREED_LATEST_VERSION;
+    if(!btn||!Number.isInteger(latest)||latest<=GREED_VERSION){window.location.href=UPDATE_BASE;return;}
+    if(btn.dataset.busy==="1")return;
+    btn.dataset.busy="1";
+    const originalText=btn.textContent;
+    btn.textContent="Downloading…";
+    const restore=(fallback)=>{
+      btn.dataset.busy="";btn.textContent=originalText;
+      if(fallback)window.location.href=UPDATE_BASE;
+    };
+    window.GREED_BUNDLE_B64=undefined;window.GREED_BUNDLE_VERSION=undefined;
+    const tag=document.createElement("script");
+    tag.async=true;
+    tag.src=UPDATE_BASE+"/greed-dice-game.bundle.js?v="+latest;
+    tag.onerror=()=>restore(true);
+    tag.onload=()=>{
+      try{
+        const b64=window.GREED_BUNDLE_B64;
+        if(typeof b64!=="string"||!b64||window.GREED_BUNDLE_VERSION!==latest)throw new Error("bad bundle");
+        const html=b64ToUtf8(b64);
+        if(html.indexOf("GREED_VERSION="+latest)===-1)throw new Error("version mismatch");
+        const url=URL.createObjectURL(new Blob([html],{type:"text/html"}));
+        const a=document.createElement("a");
+        a.href=url;a.download="greed-dice-game.html";
+        document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        btn.dataset.busy="";btn.textContent=originalText;
+      }catch(e){restore(true);}
+    };
+    document.head.appendChild(tag);
+  }
+  if($("updateDownloadBtn"))$("updateDownloadBtn").addEventListener("click",downloadNewestVersion);
   // The offline download offer only makes sense on the hosted site: a
   // downloaded copy already holds the file, so it stays hidden there.
   function revealOfflineDownload(){
